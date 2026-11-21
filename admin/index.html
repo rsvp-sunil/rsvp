@@ -313,7 +313,7 @@ const ROLES = {
 
 const blank = () => ({ name:'', mobile:'', email:'', attending:'', accompanying:'', companions:[], arrMode:'', depMode:'',
   arrPoint:'', arrPointOther:'', arrNum:'', arrDate:'', arrTime:'', depPoint:'', depPointOther:'', depNum:'', depDate:'', depTime:'',
-  roadFrom:'', roadVehicle:'', vehicleNo:'', accommodation:'', checkIn:'', checkOut:'', rooms:1,
+  roadFrom:'', roadVehicle:'', vehicleNo:'', accommodation:'', checkIn:'', checkOut:'', checkInTime:'', checkOutTime:'', rooms:1,
   pickup:'', drop:'', requests:'', info:'' });
 
 
@@ -327,6 +327,7 @@ const digits = v => String(v || '').replace(/\D/g, '');
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function fmtDate(d, withDay) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || ''); if (!m) return ''; const dt = new Date(+m[1], m[2] - 1, +m[3]); return (withDay ? DAYS[dt.getDay()] + ', ' : '') + (+m[3]) + ' ' + MONTHS[m[2] - 1] + (withDay ? '' : ' ' + m[1]); }
+function stayRange(g, sep) { const t = x => x ? ', ' + fmtTime(x) : ''; return fmtDate(g.checkIn) + t(g.checkInTime) + sep + fmtDate(g.checkOut) + t(g.checkOutTime); }
 function fmtTime(t) { const m = /^(\d{2}):(\d{2})$/.exec(t || ''); if (!m) return ''; let h = +m[1]; const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return h + ':' + m[2] + ' ' + ap; }
 function fmtPhone(p) { p = digits(p); return p.length === 10 ? p.slice(0, 5) + ' ' + p.slice(5) : p; }
 function nights(a, b) { if (!a || !b) return 0; return Math.round((new Date(b) - new Date(a)) / 864e5); }
@@ -550,8 +551,8 @@ function contactBtns(g, msg) {
     (g.email ? '<a class="sbtn" href="mailto:' + esc(g.email) + '">' + ICON.mail + 'Email</a>' : '');
 }
 function downloadCsv() {
-  const cols = ['name','mobile','email','attending','partySize','companions','arrMode','arrival','depMode','departure','accommodation','checkIn','checkOut','rooms','hotel','roomNos','stayStatus','pickup','drop','requests','info','updated'];
-  const rows = DB.guests.map(g => ({ name:g.name, mobile:g.mobile, email:g.email, attending:g.attending, partySize:partySize(g), companions:(g.companions||[]).map(c=>c.name+(c.relation?' ('+c.relation+')':'')).join('; '), arrMode:legacy(g).arrMode, depMode:g.depMode, arrival:[g.arrNum,pointName(g,'arrPoint'),g.arrDate,g.arrTime].filter(Boolean).join(' '), departure:[g.depNum,pointName(g,'depPoint'),g.depDate,g.depTime].filter(Boolean).join(' '), roadFrom:g.roadFrom, vehicleNo:g.vehicleNo, accommodation:g.accommodation, checkIn:g.checkIn, checkOut:g.checkOut, rooms:g.accommodation==='Yes'?g.rooms:'', hotel:g.accommodation==='Yes'?stayFor(g).hotel:'', roomNos:g.accommodation==='Yes'?stayFor(g).roomNos:'', stayStatus:g.accommodation==='Yes'?stayFor(g).status:'', pickup:g.pickup, drop:g.drop, requests:g.requests, info:g.info, updated:g.updated }));
+  const cols = ['name','mobile','email','attending','partySize','companions','arrMode','arrival','depMode','departure','accommodation','checkIn','checkInTime','checkOut','checkOutTime','nights','nightsNeeded','nightsWhy','rooms','hotel','roomNos','stayStatus','pickup','drop','requests','info','updated'];
+  const rows = DB.guests.map(g => ({ name:g.name, mobile:g.mobile, email:g.email, attending:g.attending, partySize:partySize(g), companions:(g.companions||[]).map(c=>c.name+(c.relation?' ('+c.relation+')':'')).join('; '), arrMode:legacy(g).arrMode, depMode:g.depMode, arrival:[g.arrNum,pointName(g,'arrPoint'),g.arrDate,g.arrTime].filter(Boolean).join(' '), departure:[g.depNum,pointName(g,'depPoint'),g.depDate,g.depTime].filter(Boolean).join(' '), roadFrom:g.roadFrom, vehicleNo:g.vehicleNo, accommodation:g.accommodation, checkIn:g.checkIn, checkInTime:fmtTime(g.checkInTime), checkOut:g.checkOut, checkOutTime:fmtTime(g.checkOutTime), nights:g.accommodation==='Yes'?roomNights(g).std:'', nightsNeeded:g.accommodation==='Yes'?roomNights(g).need:'', nightsWhy:g.accommodation==='Yes'?roomNights(g).why.join('; '):'', rooms:g.accommodation==='Yes'?g.rooms:'', hotel:g.accommodation==='Yes'?stayFor(g).hotel:'', roomNos:g.accommodation==='Yes'?stayFor(g).roomNos:'', stayStatus:g.accommodation==='Yes'?stayFor(g).status:'', pickup:g.pickup, drop:g.drop, requests:g.requests, info:g.info, updated:g.updated }));
   const csv = '﻿' + [cols.join(',')].concat(rows.map(r => cols.map(c => '"' + String(r[c] == null ? '' : r[c]).replace(/"/g, '""') + '"').join(','))).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'Siddharth-Reception-RSVPs.csv'; a.click();
 }
@@ -564,12 +565,14 @@ function tStay(el) {
   const roomsReq = list.reduce((t, g) => t + (+g.rooms || 0), 0);
   const alloc = list.filter(g => st(g).status !== 'Pending').length;
   const conf = list.filter(g => st(g).status === 'Confirmed to guest').length;
+  const extra = list.filter(g => roomNights(g).need > roomNights(g).std);
   // nightly occupancy
   const nightsMap = {};
   list.forEach(g => { let d = new Date(g.checkIn); const end = new Date(g.checkOut); while (d < end) { const k = d.toISOString().slice(0, 10); nightsMap[k] = (nightsMap[k] || 0) + (+g.rooms || 0); d.setDate(d.getDate() + 1); } });
   const nk = Object.keys(nightsMap).sort(); const max = Math.max(1, ...Object.values(nightsMap));
   el.innerHTML = '<div class="o-h"><div><h2>Accommodation</h2><p>Room allocation for guests who need a stay</p></div></div>' +
     '<div class="tiles">' + tile('Parties needing stay', list.length, sum(list) + ' people', true) + tile('Rooms requested', roomsReq, 'total rooms') + tile('Allocated', alloc, 'of ' + list.length + ' parties') + tile('Confirmed to guest', conf, 'details shared') + '</div>' +
+    (extra.length ? '<div class="card panel" style="margin-bottom:18px;border-left:4px solid var(--warn,#b7791f)"><b>' + extra.length + ' guest' + (extra.length > 1 ? 's need' : ' needs') + ' an extra night</b><div class="sm">Their arrival or departure time is outside the hotel’s standard check-in / check-out time. Look for the “nights needed” tag below and book accordingly.</div></div>' : '') +
     '<div class="cols"><section class="card panel" aria-labelledby="st-n"><h3 id="st-n">Rooms needed per night</h3>' +
       (nk.length ? nk.map(k => '<div style="display:grid;grid-template-columns:110px 1fr 40px;gap:10px;align-items:center;margin:6px 0"><span class="sm">' + esc(fmtDate(k, true)) + '</span><span style="height:12px;border-radius:6px;background:var(--line);overflow:hidden"><i style="display:block;height:100%;width:' + (nightsMap[k] / max * 100) + '%;background:var(--maroon)"></i></span><b style="text-align:right">' + nightsMap[k] + '</b></div>').join('') : '<p class="empty">No stays yet.</p>') + '</section>' +
     '<section class="card panel" aria-labelledby="st-h"><h3 id="st-h">Hotel occupancy</h3>' +
@@ -582,7 +585,7 @@ function tStay(el) {
     (list.length ? list.map(g => { const a = st(g); return '<tr data-m="' + g.mobile + '">' +
       '<td><button type="button" class="namebtn" data-open="' + g.mobile + '">' + esc(g.name) + '</button><div class="sm">' + fmtPhone(g.mobile) + '</div></td>' +
       '<td>' + partySize(g) + '</td><td><b>' + g.rooms + '</b></td>' +
-      '<td>' + esc(fmtDate(g.checkIn)) + ' → ' + esc(fmtDate(g.checkOut)) + '<div class="sm">' + nights(g.checkIn, g.checkOut) + ' night(s)</div></td>' +
+      '<td>' + esc(stayRange(g, ' → ')) + (rn => '<div class="sm">' + rn.std + ' night(s)</div>' + (rn.need > rn.std ? '<span class="tag warn" style="margin-top:4px">' + rn.need + ' nights needed</span><div class="sm" style="max-width:260px">' + rn.why.map(esc).join('<br>') + '</div>' : ''))(roomNights(g)) + '</td>' +
       '<td><select data-k="hotel" aria-label="Hotel for ' + esc(g.name) + '"' + dis() + '><option value="">Choose…</option>' + DB.hotels.filter(h => h.name).map(h => '<option' + (h.name === a.hotel ? ' selected' : '') + '>' + esc(h.name) + '</option>').join('') + '</select></td>' +
       '<td><input type="text" data-k="roomNos" value="' + esc(a.roomNos) + '" placeholder="e.g. 204, 205" aria-label="Room numbers"' + dis() + ' style="width:120px"></td>' +
       '<td><select data-k="status" aria-label="Status"' + dis() + '>' + STAY_STATUS.map(x => '<option' + (x === a.status ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></td>' +
@@ -678,16 +681,19 @@ function cardRsvp(g) {
   const rows = [['Guests', n + (n === 1 ? ' guest' : ' guests') + (comp.length ? ': ' + [firstName(g.name)].concat(comp.map(x => firstName(x.name))).join(', ') : '')]];
   if (g.arrMode) rows.push(['Arriving', legLine(g, 'arr')]);
   if (g.depMode) rows.push(['Leaving', legLine(g, 'dep')]);
-  rows.push(['Stay', g.accommodation === 'Yes' ? g.rooms + ' room' + (g.rooms > 1 ? 's' : '') + ', ' + fmtDate(g.checkIn) + ' – ' + fmtDate(g.checkOut) : 'Not needed']);
+  rows.push(['Stay', g.accommodation === 'Yes' ? g.rooms + ' room' + (g.rooms > 1 ? 's' : '') + ', ' + stayRange(g, ' – ') : 'Not needed']);
   const tr = []; if (isFT(g.arrMode) && g.pickup === 'Yes') tr.push('Pickup on arrival'); if (isFT(g.depMode) && g.drop === 'Yes') tr.push('Drop for departure');
   if (tr.length) rows.push(['Transfers', tr.join(' · ')]);
   if ((g.info || '').trim()) rows.push(['Your note', g.info.trim() + ' (our team will confirm)']);
   return { badge: 'RSVP confirmed', greet: 'Dear ' + firstName(g.name) + ', thank you for your RSVP.', rows: rows, note: 'Our team will share your stay and travel details closer to the date.', help: 'Need help? Please call\n' + helpList(), link: SITE };
 }
-function cardStay(g, a, noTime) {
+/* fmt: 'v1' = first version (dates only), 'v2' = times on the date rows; default = standard times shown under the hotel name.
+   older versions are kept only so messages already sent are still recognised as sent */
+function cardStay(g, a, fmt) {
   const h = DB.hotels.find(x => x.name === a.hotel) || {};
-  const tm = t => (!noTime && t) ? ', ' + fmtTime(t) : '';
+  const tm = t => (fmt === 'v2' && t) ? ', ' + fmtTime(t) : '';
   const rows = [['Hotel', a.hotel]];
+  if (!fmt && (h.checkInTime || h.checkOutTime)) rows.push(['Hotel timings', [h.checkInTime ? 'Check-in ' + fmtTime(h.checkInTime) : '', h.checkOutTime ? 'Check-out ' + fmtTime(h.checkOutTime) : ''].filter(Boolean).join(' · ') + '\n(standard times, for your information)']);
   if (h.address) rows.push(['Address', h.address]);
   if (a.roomNos) rows.push(['Room' + (/[,&\s]/.test(a.roomNos.trim()) ? 's' : ''), a.roomNos]);
   rows.push(['Check-in', fmtDate(g.checkIn, true) + tm(h.checkInTime)], ['Check-out', fmtDate(g.checkOut, true) + tm(h.checkOutTime)], ['Guests', String(partySize(g))]);
@@ -734,7 +740,7 @@ const OLD = {
     const rows = ['\u{1F465} ' + partyLine(g), '\u{1F4C5} ' + EVENT.dateText + ', ' + EVENT.time, '\u{1F4CD} ' + EVENT.venue + ', ' + EVENT.place];
     if (g.arrMode) rows.push('➡️ Arriving: ' + legLine(g, 'arr'));
     if (g.depMode) rows.push('⬅️ Leaving: ' + legLine(g, 'dep'));
-    rows.push('\u{1F3E8} Stay: ' + (g.accommodation === 'Yes' ? g.rooms + ' room' + (g.rooms > 1 ? 's' : '') + ', ' + fmtDate(g.checkIn) + ' – ' + fmtDate(g.checkOut) : 'Not needed'));
+    rows.push('\u{1F3E8} Stay: ' + (g.accommodation === 'Yes' ? g.rooms + ' room' + (g.rooms > 1 ? 's' : '') + ', ' + stayRange(g, ' – ') : 'Not needed'));
     const tr = []; if (isFT(g.arrMode) && g.pickup === 'Yes') tr.push('Pickup on arrival'); if (isFT(g.depMode) && g.drop === 'Yes') tr.push('Drop for departure');
     if (tr.length) rows.push('\u{1F697} ' + tr.join(' · '));
     if ((g.info || '').trim()) rows.push('\u{1F4DD} Your note: ' + g.info.trim() + ' (our team will confirm)');
@@ -907,18 +913,34 @@ function waCardModal(it) {
   }).catch(e => err('Could not draw the card: ' + (e && e.message || e)));
 }
 function stayFor(g) { return DB.stay[g.mobile] || { hotel:'', roomNos:'', status:'Pending', note:'' }; }
+/* room nights: standard nights from the dates, plus one if the guest reaches the hotel before the hotel's standard check-in time,
+   plus one if they leave after the standard check-out time (flight/train departures: leave the hotel 2 hours before) */
+function stdHotel(g) { const a = DB.stay[g.mobile]; const h = a && a.hotel && DB.hotels.find(x => x.name === a.hotel); return h && (h.checkInTime || h.checkOutTime) ? h : DB.hotels.find(x => x.checkInTime || x.checkOutTime) || null; }
+function minusMin(t, m) { const x = /^(\d{2}):(\d{2})$/.exec(t || ''); if (!x) return ''; const v = Math.max(0, +x[1] * 60 + +x[2] - m); return String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0'); }
+function roomNights(g) {
+  const std = nights(g.checkIn, g.checkOut), r = { std: std, need: std, why: [] };
+  if (g.accommodation !== 'Yes' || std <= 0) return r;
+  const h = stdHotel(g); if (!h) return r;
+  let arr = g.checkInTime, arrHow = 'reaches the hotel';
+  if (!arr && isFT(g.arrMode) && g.arrDate === g.checkIn && g.arrTime) { arr = g.arrTime; arrHow = (g.arrMode === 'Flight' ? 'flight' : 'train') + ' arrives'; }
+  let dep = g.checkOutTime, depHow = 'leaves the hotel';
+  if (!dep && isFT(g.depMode) && g.depDate === g.checkOut && g.depTime) { dep = minusMin(g.depTime, 120); depHow = 'leaves the hotel about ' + fmtTime(dep) + ' for a ' + fmtTime(g.depTime) + ' ' + g.depMode.toLowerCase(); }
+  if (arr && h.checkInTime && arr < h.checkInTime) { r.need++; r.why.push((arrHow === 'reaches the hotel' ? 'Arrives ' + fmtTime(arr) : arrHow.charAt(0).toUpperCase() + arrHow.slice(1) + ' ' + fmtTime(arr)) + ', before ' + fmtTime(h.checkInTime) + ' check-in – book the night before'); }
+  if (dep && h.checkOutTime && dep > h.checkOutTime) { r.need++; r.why.push((depHow === 'leaves the hotel' ? 'Leaves ' + fmtTime(dep) : 'Leaves the hotel about ' + fmtTime(dep) + ' (' + g.depMode.toLowerCase() + ' ' + fmtTime(g.depTime) + ')') + ', after ' + fmtTime(h.checkOutTime) + ' check-out – keep the room one more night'); }
+  r.hotel = h.name; return r;
+}
 function tripFor(t) { return DB.trips[t.id] || { vehicleNo:'', status:'Pending' }; }
 function waItems() {
   const out = [];
   if (can('guests')) DB.guests.forEach(g => out.push({ g: g, key: 'rsvp:' + g.mobile, type: 'rsvp', label: g.attending === 'Yes' ? 'RSVP card' : 'RSVP reply', to: g.mobile, name: g.name, card: cardRsvp(g), old: OLD.rsvp(g), when: g.updated }));
-  if (can('stay')) yesGuests().filter(g => g.accommodation === 'Yes' && stayFor(g).hotel).forEach(g => out.push({ g: g, key: 'stay:' + g.mobile, type: 'stay', label: 'Stay confirmation', to: g.mobile, name: g.name, card: cardStay(g, stayFor(g)), old: OLD.stay(g, stayFor(g)), old2: cardText(cardStay(g, stayFor(g), true)), when: g.checkIn }));
+  if (can('stay')) yesGuests().filter(g => g.accommodation === 'Yes' && stayFor(g).hotel).forEach(g => out.push({ g: g, key: 'stay:' + g.mobile, type: 'stay', label: 'Stay confirmation', to: g.mobile, name: g.name, card: cardStay(g, stayFor(g)), old: OLD.stay(g, stayFor(g)), old2: cardText(cardStay(g, stayFor(g), 'v1')), old3: cardText(cardStay(g, stayFor(g), 'v2')), when: g.checkIn }));
   if (can('transport')) buildTrips().filter(t => tripFor(t).vehicleNo && fleetBy(tripFor(t).vehicleNo)).forEach(t => {
     const v = tripFor(t), f = fleetBy(v.vehicleNo);
     out.push({ trip: t, key: 'trip:' + t.id, type: 'trip', label: t.type + ' details', to: t.g.mobile, name: t.g.name, card: cardTrip(t, v), old: OLD.trip(t, v), when: t.date });
     if (f.driverPhone) out.push({ trip: t, key: 'drv:' + t.id, type: 'driver', label: 'Driver trip sheet', to: f.driverPhone, name: f.driver + ' (driver for ' + firstName(t.g.name) + ')', card: cardDriver(t, v), old: OLD.driver(t, v), when: t.date });
   });
   if (can('guests')) (DB.outbox || []).forEach(o => out.push({ key: 'cus:' + o.id, type: 'custom', label: 'Custom message', to: o.mobile, name: o.name || o.mobile, card: cardCustom(o.text), when: o.created, custom: o.id }));
-  out.forEach(it => { it.text = cardText(it.card); it.hash = waHash(it.text); const s = DB.waSent[it.key]; it.state = !s ? 'pending' : (s.hash === it.hash || (it.old && s.hash === waHash(it.old)) || (it.old2 && s.hash === waHash(it.old2)) || (s.hash === 'auto' && it.g && s.upd === it.g.updated)) ? 'sent' : 'changed'; it.sent = s; });
+  out.forEach(it => { it.text = cardText(it.card); it.hash = waHash(it.text); const s = DB.waSent[it.key]; it.state = !s ? 'pending' : (s.hash === it.hash || (it.old && s.hash === waHash(it.old)) || (it.old2 && s.hash === waHash(it.old2)) || (it.old3 && s.hash === waHash(it.old3)) || (s.hash === 'auto' && it.g && s.upd === it.g.updated)) ? 'sent' : 'changed'; it.sent = s; });
   return out;
 }
 /* ---------- automatic WhatsApp through WokieTokie: the values each approved template needs ---------- */
@@ -1232,7 +1254,7 @@ function summaryRows(g, withNotes) {
     legacy(g);
     rows.push(['Arrival', isFT(g.arrMode) ? g.arrMode + '\n' + journey(g.arrNum, pointName(g, 'arrPoint'), g.arrDate, g.arrTime) : modeLabel(g.arrMode)]);
     rows.push(['Departure', isFT(g.depMode) ? g.depMode + '\n' + journey(g.depNum, pointName(g, 'depPoint'), g.depDate, g.depTime) : modeLabel(g.depMode)]);
-    rows.push(['Accommodation', g.accommodation === 'Yes' ? g.rooms + ' room' + (g.rooms > 1 ? 's' : '') + '\n' + fmtDate(g.checkIn) + ' → ' + fmtDate(g.checkOut) : 'Not needed']);
+    rows.push(['Accommodation', g.accommodation === 'Yes' ? g.rooms + ' room' + (g.rooms > 1 ? 's' : '') + '\n' + stayRange(g, ' → ') : 'Not needed']);
     if (isFT(g.arrMode)) rows.push(['Pickup', g.pickup === 'Yes' ? 'Yes' : 'Not needed']);
     if (isFT(g.depMode)) rows.push(['Drop', g.drop === 'Yes' ? 'Yes' : 'Not needed']);
     if (withNotes && (g.info || '').trim()) rows.push(['Additional info', g.info.trim() + '\n(team will confirm)']);
