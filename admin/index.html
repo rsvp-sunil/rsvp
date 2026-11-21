@@ -376,8 +376,8 @@ function renderOrg() {
     });
     return;
   }
-  const tabs = MODULES.filter(m => can(m[0]));
-  if (!can(TAB)) TAB = tabs[0][0];
+  const tabs = MODULES.filter(m => can(m[0])).concat(ME.role === 'Admin' && typeof tActivity === 'function' ? [['activity', 'Activity log']] : []);
+  if (!tabs.some(m => m[0] === TAB)) TAB = tabs[0][0];
   const newReq = visibleRequests().filter(r => r.status === 'New').length;
   root.innerHTML =
     '<header class="o-top"><div class="brand"><img src="' + LOGO + '" alt=""><div><h1>Siddharth Reception</h1><p>VIP Management · 29 Nov 2026 · Amara Raja Auditorium</p></div></div>' +
@@ -389,7 +389,7 @@ function renderOrg() {
   $('#refresh').addEventListener('click', () => reload(true));
   $('#chPw').addEventListener('click', passwordForm);
   $$('[data-tab]').forEach(b => b.addEventListener('click', () => { TAB = b.dataset.tab; renderOrg(); }));
-  ({ overview: tOverview, guests: tGuests, stay: tStay, transport: tTransport, requests: tRequests, users: tUsers, master: tMaster, wa: tWa, notify: tNotify })[TAB]($('#oMain'));
+  ({ overview: tOverview, guests: tGuests, stay: tStay, transport: tTransport, requests: tRequests, users: tUsers, master: tMaster, wa: tWa, notify: tNotify, activity: typeof tActivity === 'function' ? tActivity : tOverview })[TAB]($('#oMain'));
 }
 /* ---------- server bridge ---------- */
 function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
@@ -1346,6 +1346,49 @@ function bindWk(el) {
     WK_ROWS.forEach(r => v[r[0]] = $('#wk_' + r[0]).value.trim());
     b.disabled = true;
     save('saveWokie', [v], w => { DB.wk = w; rerender(); }).then(() => { b.disabled = false; });
+  });
+}
+
+/* ---------- Activity log (Admin) ---------- */
+const ACT = { rows: null, loading: false, err: '', src: 'all', who: '', area: '', day: '', q: '', show: 200 };
+function loadActivity(el) {
+  ACT.loading = true; ACT.err = ''; tActivity(el);
+  call('activityLoad', TOKEN, 2000).then(r => { ACT.rows = r || []; ACT.loading = false; if (TAB === 'activity') tActivity(el); })
+    .catch(e => { ACT.loading = false; ACT.err = e.message; if (TAB === 'activity') tActivity(el); });
+}
+function tActivity(el) {
+  if (ACT.rows === null && !ACT.loading && !ACT.err) { loadActivity(el); return; }
+  const all = ACT.rows || [];
+  const uniq = f => Array.from(new Set(all.map(f).filter(Boolean))).sort();
+  const day = r => String(r.at).slice(0, 10);
+  const q = ACT.q.trim().toLowerCase();
+  const list = all.filter(r => (ACT.src === 'all' || r.src === ACT.src) && (!ACT.who || r.who === ACT.who) && (!ACT.area || r.area === ACT.area) && (!ACT.day || day(r) === ACT.day) &&
+    (!q || [r.who, r.area, r.action, r.item, r.det].join(' ').toLowerCase().indexOf(q) >= 0));
+  const cnt = s => all.filter(r => s === 'all' || r.src === s).length;
+  const srcTag = s => '<span class="tag ' + (s === 'System' ? 'plain' : s === 'Guest' ? 'ok' : 'warn') + '">' + esc(s) + '</span>';
+  const sel = (id, label, val, opts) => '<label class="sm" style="display:flex;flex-direction:column;gap:4px">' + label + '<select id="' + id + '" style="min-width:150px"><option value="">All</option>' + opts.map(o => '<option' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select></label>';
+  el.innerHTML = '<div class="o-h"><div><h2>Activity log</h2><p>Who did what and when – every change by organisers, every RSVP by guests, and every automatic email, WhatsApp and report sent by the system.</p></div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sbtn" id="actRef">Refresh</button><button type="button" class="sbtn" id="actCsv">Download Excel (CSV)</button></div></div>' +
+    '<div class="tools"><div class="chips" role="group" aria-label="Source">' + [['all', 'All'], ['User', 'Organisers'], ['Guest', 'Guests'], ['System', 'System (automatic)']].map(c => '<button type="button" class="chip" data-asrc="' + c[0] + '" aria-pressed="' + (ACT.src === c[0]) + '">' + c[1] + '<span class="n">' + cnt(c[0]) + '</span></button>').join('') + '</div></div>' +
+    '<div class="card panel" style="margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">' +
+      sel('actWho', 'Person', ACT.who, uniq(r => r.who)) + sel('actArea', 'Area', ACT.area, uniq(r => r.area)) + sel('actDay', 'Date', ACT.day, uniq(day).reverse()) +
+      '<label class="sm" style="display:flex;flex-direction:column;gap:4px;flex:1 1 200px">Search<input type="search" id="actQ" value="' + esc(ACT.q) + '" placeholder="Guest name, hotel, vehicle…"></label></div>' +
+    (ACT.loading ? '<p class="empty">Loading activity…</p>' : ACT.err ? '<p class="empty">' + esc(ACT.err) + '</p>' :
+    '<p class="sm" style="margin:0 0 8px">' + list.length + ' of ' + all.length + ' entries' + (all.length >= 2000 ? ' (latest 2,000 shown here – the full history is in the “Activity” tab of the Google Sheet)' : '') + '</p>' +
+    '<div class="tablebox"><table style="min-width:980px"><thead><tr><th>Time</th><th>Who</th><th>Area</th><th>What</th><th>For</th><th>Details</th></tr></thead><tbody>' +
+      (list.length ? list.slice(0, ACT.show).map(r => '<tr><td class="sm" style="white-space:nowrap">' + esc(r.at) + '</td><td><b>' + esc(r.who || '–') + '</b><div class="sm">' + srcTag(r.src) + (r.role && r.role !== 'Guest' ? ' ' + esc(r.role) : '') + '</div></td>' +
+        '<td>' + esc(r.area) + '</td><td>' + esc(r.action) + '</td><td class="sm">' + esc(r.item) + '</td><td class="sm" style="max-width:380px;white-space:pre-wrap;' + (/^Failed/.test(r.det) ? 'color:var(--bad)' : '') + '">' + esc(r.det).replace(/ \| /g, '\n').replace(/; /g, '\n') + '</td></tr>').join('')
+        : '<tr><td colspan="6" class="empty">No activity matches these filters.</td></tr>') + '</tbody></table></div>' +
+      (list.length > ACT.show ? '<div style="text-align:center;margin-top:12px"><button type="button" class="sbtn" id="actMore">Show more</button></div>' : ''));
+  $$('[data-asrc]', el).forEach(b => b.addEventListener('click', () => { ACT.src = b.dataset.asrc; ACT.show = 200; tActivity(el); }));
+  [['#actWho', 'who'], ['#actArea', 'area'], ['#actDay', 'day']].forEach(x => { const i = $(x[0], el); if (i) i.addEventListener('change', () => { ACT[x[1]] = i.value; ACT.show = 200; tActivity(el); }); });
+  const qi = $('#actQ', el); if (qi) qi.addEventListener('change', () => { ACT.q = qi.value; ACT.show = 200; tActivity(el); });
+  const m = $('#actMore', el); if (m) m.addEventListener('click', () => { ACT.show += 300; tActivity(el); });
+  $('#actRef', el).addEventListener('click', () => loadActivity(el));
+  $('#actCsv', el).addEventListener('click', () => {
+    const head = ['Time', 'Who', 'Role', 'Source', 'Area', 'What', 'For', 'Details'];
+    const csv = '\ufeff' + [head].concat(list.map(r => [r.at, r.who, r.role, r.src, r.area, r.action, r.item, r.det])).map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'Activity-log.csv'; a.click();
   });
 }
 
