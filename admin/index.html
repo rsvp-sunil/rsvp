@@ -1116,14 +1116,14 @@ const MASTER = {
   hotels: { title: 'Hotels & guest houses', note: 'Used in the Accommodation dropdowns. Room count drives the occupancy check. Standard check-in and check-out times appear on the guest’s stay confirmation.', get: () => DB.hotels,
     blank: () => ({ name:'', address:'', contact:'', phone:'', email:'', rooms:'', checkInTime:'', checkOutTime:'' }),
     cols: [['name','Name','text',170],['address','Address','text',170],['contact','Contact person','text',130],['phone','Phone','tel',120],['email','Email','email',170],['rooms','Rooms','number',70],['checkInTime','Check-in time','time',120],['checkOutTime','Check-out time','time',120]],
-    inUse: (r) => Object.values(DB.stay).filter(x => x.hotel === r.name).length },
+    inUse: (r) => r.name ? Object.keys(DB.stay).filter(k => DB.stay[k].hotel === r.name).map(k => (DB.guests.find(x => x.mobile === k) || {}).name || ('+91 ' + fmtPhone(k))) : [] },
   vtypes: { title: 'Vehicle types', note: 'Seats decide which type is suggested for each party.', get: () => DB.vehicleTypes,
     blank: () => ({ name:'', seats:'' }), cols: [['name','Type','text',170],['seats','Seats','number',70]],
-    inUse: (r) => DB.fleet.filter(f => f.type === r.name).length },
+    inUse: (r) => r.name ? DB.fleet.filter(f => f.type === r.name).map(f => f.vehicleNo || 'a vehicle') : [] },
   fleet: { title: 'Vehicles & drivers', note: 'Assign these to trips on the Transport tab. Driver details are shared with guests.', get: () => DB.fleet,
     blank: () => ({ vehicleNo:'', type:(DB.vehicleTypes[0] || {}).name || '', driver:'', driverPhone:'', vendor:'' }),
     cols: [['vehicleNo','Vehicle no.','text',130],['type','Type','select',150,() => DB.vehicleTypes.map(t => t.name)],['driver','Driver','text',120],['driverPhone','Driver phone','tel',120],['vendor','Vendor / owner','text',140]],
-    inUse: (r) => Object.values(DB.trips).filter(x => x.vehicleNo === r.vehicleNo).length },
+    inUse: (r) => r.vehicleNo ? Object.keys(DB.trips).filter(k => DB.trips[k].vehicleNo === r.vehicleNo).map(k => 'trip ' + k) : [] },
   stay: { title: 'Accommodation team contacts', note: 'Get email alerts for stay-related guest notes. The first number is shared with guests in stay messages.', get: () => DB.teamContacts.stay,
     blank: () => ({ name:'', phone:'', email:'' }), cols: [['name','Name','text',170],['phone','Mobile','tel',130],['email','Email','email',200]] },
   transport: { title: 'Transport team contacts', note: 'Get email alerts for travel-related guest notes. The first number is shared with guests in pickup and drop messages.', get: () => DB.teamContacts.transport,
@@ -1172,8 +1172,8 @@ function tMaster(el) {
   }));
   $$('[data-mrm]', el).forEach(b => b.addEventListener('click', () => {
     const k = b.dataset.mrm, m = MASTER[k], rows = m.get(), i = +b.dataset.i;
-    const used = m.inUse ? m.inUse(rows[i]) : 0;
-    if (used) { toast('Can’t remove: in use in ' + used + ' assignment' + (used > 1 ? 's' : '')); return; }
+    const used = m.inUse ? m.inUse(rows[i]) : [];
+    if (used.length) { toast('Can’t remove yet: still assigned to ' + used.slice(0, 3).join(', ') + (used.length > 3 ? ' and ' + (used.length - 3) + ' more' : '') + '. Change those first.'); return; }
     if (k === 'help' && rows.length <= 1) { toast('Keep at least one guest help number'); return; }
     rows.splice(i, 1); tMaster(el); saveMasterKey(k);
   }));
