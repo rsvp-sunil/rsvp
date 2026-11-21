@@ -438,7 +438,8 @@ input::placeholder{text-transform:none}
         <div class="field"><span class="lbl" id="q-stayq">Will you require accommodation?</span>
           <div class="choice" data-field="accommodation" role="group" aria-labelledby="q-stayq"><button type="button" data-v="Yes" aria-pressed="false">Yes, please</button><button type="button" data-v="No" aria-pressed="false">No, thank you</button></div></div>
         <div data-show-if="accommodation=Yes">
-          <div class="grid2 field"><div><label class="mini" for="f-ci">Check-in</label><input type="date" id="f-ci" data-field="checkIn"></div><div><label class="mini" for="f-co">Check-out</label><input type="date" id="f-co" data-field="checkOut"></div></div>
+          <div class="grid2 field"><div><label class="mini" for="f-ci">Check-in</label><input type="date" id="f-ci" data-field="checkIn"><div data-show-if="arrMode=Road" style="margin-top:10px"><label class="mini" for="f-cit">Check-in time</label><input type="time" id="f-cit" data-field="checkInTime"></div></div><div><label class="mini" for="f-co">Check-out</label><input type="date" id="f-co" data-field="checkOut"><div data-show-if="depMode=Road" style="margin-top:10px"><label class="mini" for="f-cot">Check-out time</label><input type="time" id="f-cot" data-field="checkOutTime"></div></div></div>
+          <p class="hint" data-show-if="arrMode=Road;depMode=Road" style="margin:-6px 0 14px">As you are travelling by road, please tell us roughly when you will reach the hotel and when you will leave.</p>
           <div class="field"><span class="mini" id="q-rooms">Rooms needed</span>
             <div class="stepper" role="group" aria-labelledby="q-rooms"><button type="button" id="roomMinus" aria-label="Fewer rooms">−</button><output id="roomCount" aria-live="polite">1</output><button type="button" id="roomPlus" aria-label="More rooms">+</button></div>
             <p class="hint" id="roomHint"></p></div>
@@ -512,7 +513,7 @@ const ROLES = {
 
 const blank = () => ({ name:'', mobile:'', email:'', attending:'', accompanying:'', companions:[], arrMode:'', depMode:'',
   arrPoint:'', arrPointOther:'', arrNum:'', arrDate:'', arrTime:'', depPoint:'', depPointOther:'', depNum:'', depDate:'', depTime:'',
-  roadFrom:'', roadVehicle:'', vehicleNo:'', accommodation:'', checkIn:'', checkOut:'', rooms:1,
+  roadFrom:'', roadVehicle:'', vehicleNo:'', accommodation:'', checkIn:'', checkOut:'', checkInTime:'', checkOutTime:'', rooms:1,
   pickup:'', drop:'', requests:'', info:'' });
 
 
@@ -526,6 +527,7 @@ const digits = v => String(v || '').replace(/\D/g, '');
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function fmtDate(d, withDay) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || ''); if (!m) return ''; const dt = new Date(+m[1], m[2] - 1, +m[3]); return (withDay ? DAYS[dt.getDay()] + ', ' : '') + (+m[3]) + ' ' + MONTHS[m[2] - 1] + (withDay ? '' : ' ' + m[1]); }
+function stayRange(g, sep) { const t = x => x ? ', ' + fmtTime(x) : ''; return fmtDate(g.checkIn) + t(g.checkInTime) + sep + fmtDate(g.checkOut) + t(g.checkOutTime); }
 function fmtTime(t) { const m = /^(\d{2}):(\d{2})$/.exec(t || ''); if (!m) return ''; let h = +m[1]; const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return h + ':' + m[2] + ' ' + ap; }
 function fmtPhone(p) { p = digits(p); return p.length === 10 ? p.slice(0, 5) + ' ' + p.slice(5) : p; }
 function nights(a, b) { if (!a || !b) return 0; return Math.round((new Date(b) - new Date(a)) / 864e5); }
@@ -677,6 +679,8 @@ $('#stayNext').addEventListener('click', () => {
   if (s.accommodation === 'Yes') {
     if (!s.checkIn || !s.checkOut) return showErr('Please choose your check-in and check-out dates.');
     if (s.checkOut <= s.checkIn) return showErr('Check-out must be after check-in.');
+    if (s.arrMode === 'Road' && !s.checkInTime) return showErr('Please tell us your expected check-in time.');
+    if (s.depMode === 'Road' && !s.checkOutTime) return showErr('Please tell us your expected check-out time.');
   }
   if (isFT(s.arrMode) && !s.pickup) return showErr('Please tell us if you need a pickup on arrival.');
   if (isFT(s.depMode) && !s.drop) return showErr('Please tell us if you need a drop for departure.');
@@ -695,7 +699,7 @@ function summaryRows(g, withNotes) {
     legacy(g);
     rows.push(['Arrival', isFT(g.arrMode) ? g.arrMode + '\n' + journey(g.arrNum, pointName(g, 'arrPoint'), g.arrDate, g.arrTime) : modeLabel(g.arrMode)]);
     rows.push(['Departure', isFT(g.depMode) ? g.depMode + '\n' + journey(g.depNum, pointName(g, 'depPoint'), g.depDate, g.depTime) : modeLabel(g.depMode)]);
-    rows.push(['Accommodation', g.accommodation === 'Yes' ? g.rooms + ' room' + (g.rooms > 1 ? 's' : '') + '\n' + fmtDate(g.checkIn) + ' → ' + fmtDate(g.checkOut) : 'Not needed']);
+    rows.push(['Accommodation', g.accommodation === 'Yes' ? g.rooms + ' room' + (g.rooms > 1 ? 's' : '') + '\n' + stayRange(g, ' → ') : 'Not needed']);
     if (isFT(g.arrMode)) rows.push(['Pickup', g.pickup === 'Yes' ? 'Yes' : 'Not needed']);
     if (isFT(g.depMode)) rows.push(['Drop', g.drop === 'Yes' ? 'Yes' : 'Not needed']);
     if (withNotes && (g.info || '').trim()) rows.push(['Additional info', g.info.trim() + '\n(team will confirm)']);
