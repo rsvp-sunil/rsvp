@@ -290,7 +290,7 @@ input::placeholder{text-transform:none}
 <div id="org" class="o-app"></div>
 <div id="modalRoot"></div>
 <script>
-const CONFIG = {"event": {"title": "Reception", "couple": "Siddharth Galla & Hyein Kim", "date": "2026-11-29", "dateText": "Sunday, 29 November 2026", "time": "7:30 PM onwards", "venue": "Amara Raja Auditorium", "place": "Karakambadi, Tirupati", "respondBy": "15 November 2026"}, "help": [{"name": "C V Ramana Kumar", "phone": "9490495998"}, {"name": "Aditya Vemulapalli", "phone": "9999857671"}], "points": {"Flight": ["Tirupati Airport (TIR)", "Chennai Airport (MAA)", "Bengaluru Airport (BLR)", "Other"], "Train": ["Tirupati (TPTY)", "Renigunta Junction (RU)", "Other"]}, "wa": ["8341173006"], "url": "https://rsvp.vipmanagement.info"};
+const CONFIG = {"event": {"title": "Reception", "couple": "Siddharth Galla & Hyein Kim", "date": "2026-11-29", "dateText": "Sunday, 29 November 2026", "time": "7:30 PM onwards", "venue": "Amara Raja Auditorium", "place": "Karakambadi, Tirupati", "respondBy": "24 November 2026"}, "help": [{"name": "C V Ramana Kumar", "phone": "9490495998"}, {"name": "Aditya Vemulapalli", "phone": "9999857671"}], "points": {"Flight": ["Tirupati Airport (TIR)", "Chennai Airport (MAA)", "Bengaluru Airport (BLR)", "Other"], "Train": ["Tirupati (TPTY)", "Renigunta Junction (RU)", "Other"]}, "wa": ["8341173006"], "url": "https://rsvp.vipmanagement.info"};
 const LOGO = '/logo.webp';
 const EVENT = Object.assign({ name: 'Siddharth Reception VIP Management' }, CONFIG.event, { contacts: CONFIG.help || [] });
 let POINTS = CONFIG.points;
@@ -402,7 +402,7 @@ function call(fn) {
 }
 function applyData(d) {
   ME = d.me;
-  ['guests','users','hotels','vehicleTypes','fleet','teamContacts','stay','trips','requests','notify','log','quota','sheetUrl','generated','wa','wk','waSent','outbox'].forEach(k => { DB[k] = d[k]; });
+  ['guests','users','hotels','vehicleTypes','fleet','teamContacts','stay','trips','requests','notify','log','quota','sheetUrl','generated','wa','wk','report','waSent','outbox'].forEach(k => { DB[k] = d[k]; });
   EVENT.contacts = d.helpContacts || []; POINTS = d.points || POINTS; DB.helpWa = d.helpWhatsApp || []; HELP_WA = DB.helpWa[0] || '';
   LOADED = true;
 }
@@ -550,8 +550,8 @@ function contactBtns(g, msg) {
     (g.email ? '<a class="sbtn" href="mailto:' + esc(g.email) + '">' + ICON.mail + 'Email</a>' : '');
 }
 function downloadCsv() {
-  const cols = ['name','mobile','email','attending','partySize','companions','arrMode','arrival','depMode','departure','accommodation','checkIn','checkOut','rooms','pickup','drop','requests','info','updated'];
-  const rows = DB.guests.map(g => ({ name:g.name, mobile:g.mobile, email:g.email, attending:g.attending, partySize:partySize(g), companions:(g.companions||[]).map(c=>c.name+(c.relation?' ('+c.relation+')':'')).join('; '), arrMode:legacy(g).arrMode, depMode:g.depMode, arrival:[g.arrNum,pointName(g,'arrPoint'),g.arrDate,g.arrTime].filter(Boolean).join(' '), departure:[g.depNum,pointName(g,'depPoint'),g.depDate,g.depTime].filter(Boolean).join(' '), roadFrom:g.roadFrom, vehicleNo:g.vehicleNo, accommodation:g.accommodation, checkIn:g.checkIn, checkOut:g.checkOut, rooms:g.accommodation==='Yes'?g.rooms:'', pickup:g.pickup, drop:g.drop, requests:g.requests, info:g.info, updated:g.updated }));
+  const cols = ['name','mobile','email','attending','partySize','companions','arrMode','arrival','depMode','departure','accommodation','checkIn','checkOut','rooms','hotel','roomNos','stayStatus','pickup','drop','requests','info','updated'];
+  const rows = DB.guests.map(g => ({ name:g.name, mobile:g.mobile, email:g.email, attending:g.attending, partySize:partySize(g), companions:(g.companions||[]).map(c=>c.name+(c.relation?' ('+c.relation+')':'')).join('; '), arrMode:legacy(g).arrMode, depMode:g.depMode, arrival:[g.arrNum,pointName(g,'arrPoint'),g.arrDate,g.arrTime].filter(Boolean).join(' '), departure:[g.depNum,pointName(g,'depPoint'),g.depDate,g.depTime].filter(Boolean).join(' '), roadFrom:g.roadFrom, vehicleNo:g.vehicleNo, accommodation:g.accommodation, checkIn:g.checkIn, checkOut:g.checkOut, rooms:g.accommodation==='Yes'?g.rooms:'', hotel:g.accommodation==='Yes'?stayFor(g).hotel:'', roomNos:g.accommodation==='Yes'?stayFor(g).roomNos:'', stayStatus:g.accommodation==='Yes'?stayFor(g).status:'', pickup:g.pickup, drop:g.drop, requests:g.requests, info:g.info, updated:g.updated }));
   const csv = '﻿' + [cols.join(',')].concat(rows.map(r => cols.map(c => '"' + String(r[c] == null ? '' : r[c]).replace(/"/g, '""') + '"').join(','))).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'Siddharth-Reception-RSVPs.csv'; a.click();
 }
@@ -684,12 +684,13 @@ function cardRsvp(g) {
   if ((g.info || '').trim()) rows.push(['Your note', g.info.trim() + ' (our team will confirm)']);
   return { badge: 'RSVP confirmed', greet: 'Dear ' + firstName(g.name) + ', thank you for your RSVP.', rows: rows, note: 'Our team will share your stay and travel details closer to the date.', help: 'Need help? Please call\n' + helpList(), link: SITE };
 }
-function cardStay(g, a) {
+function cardStay(g, a, noTime) {
   const h = DB.hotels.find(x => x.name === a.hotel) || {};
+  const tm = t => (!noTime && t) ? ', ' + fmtTime(t) : '';
   const rows = [['Hotel', a.hotel]];
   if (h.address) rows.push(['Address', h.address]);
   if (a.roomNos) rows.push(['Room' + (/[,&\s]/.test(a.roomNos.trim()) ? 's' : ''), a.roomNos]);
-  rows.push(['Check-in', fmtDate(g.checkIn, true)], ['Check-out', fmtDate(g.checkOut, true)], ['Guests', String(partySize(g))]);
+  rows.push(['Check-in', fmtDate(g.checkIn, true) + tm(h.checkInTime)], ['Check-out', fmtDate(g.checkOut, true) + tm(h.checkOutTime)], ['Guests', String(partySize(g))]);
   if (h.phone) rows.push(['Hotel phone', fmtPhone(h.phone)]);
   return { badge: 'Your stay is confirmed', greet: 'Dear ' + firstName(g.name) + ',', rows: rows, help: 'For any help with your stay, please call\n' + helpList('stay') };
 }
@@ -910,14 +911,14 @@ function tripFor(t) { return DB.trips[t.id] || { vehicleNo:'', status:'Pending' 
 function waItems() {
   const out = [];
   if (can('guests')) DB.guests.forEach(g => out.push({ g: g, key: 'rsvp:' + g.mobile, type: 'rsvp', label: g.attending === 'Yes' ? 'RSVP card' : 'RSVP reply', to: g.mobile, name: g.name, card: cardRsvp(g), old: OLD.rsvp(g), when: g.updated }));
-  if (can('stay')) yesGuests().filter(g => g.accommodation === 'Yes' && stayFor(g).hotel).forEach(g => out.push({ g: g, key: 'stay:' + g.mobile, type: 'stay', label: 'Stay confirmation', to: g.mobile, name: g.name, card: cardStay(g, stayFor(g)), old: OLD.stay(g, stayFor(g)), when: g.checkIn }));
+  if (can('stay')) yesGuests().filter(g => g.accommodation === 'Yes' && stayFor(g).hotel).forEach(g => out.push({ g: g, key: 'stay:' + g.mobile, type: 'stay', label: 'Stay confirmation', to: g.mobile, name: g.name, card: cardStay(g, stayFor(g)), old: OLD.stay(g, stayFor(g)), old2: cardText(cardStay(g, stayFor(g), true)), when: g.checkIn }));
   if (can('transport')) buildTrips().filter(t => tripFor(t).vehicleNo && fleetBy(tripFor(t).vehicleNo)).forEach(t => {
     const v = tripFor(t), f = fleetBy(v.vehicleNo);
     out.push({ trip: t, key: 'trip:' + t.id, type: 'trip', label: t.type + ' details', to: t.g.mobile, name: t.g.name, card: cardTrip(t, v), old: OLD.trip(t, v), when: t.date });
     if (f.driverPhone) out.push({ trip: t, key: 'drv:' + t.id, type: 'driver', label: 'Driver trip sheet', to: f.driverPhone, name: f.driver + ' (driver for ' + firstName(t.g.name) + ')', card: cardDriver(t, v), old: OLD.driver(t, v), when: t.date });
   });
   if (can('guests')) (DB.outbox || []).forEach(o => out.push({ key: 'cus:' + o.id, type: 'custom', label: 'Custom message', to: o.mobile, name: o.name || o.mobile, card: cardCustom(o.text), when: o.created, custom: o.id }));
-  out.forEach(it => { it.text = cardText(it.card); it.hash = waHash(it.text); const s = DB.waSent[it.key]; it.state = !s ? 'pending' : (s.hash === it.hash || (it.old && s.hash === waHash(it.old)) || (s.hash === 'auto' && it.g && s.upd === it.g.updated)) ? 'sent' : 'changed'; it.sent = s; });
+  out.forEach(it => { it.text = cardText(it.card); it.hash = waHash(it.text); const s = DB.waSent[it.key]; it.state = !s ? 'pending' : (s.hash === it.hash || (it.old && s.hash === waHash(it.old)) || (it.old2 && s.hash === waHash(it.old2)) || (s.hash === 'auto' && it.g && s.upd === it.g.updated)) ? 'sent' : 'changed'; it.sent = s; });
   return out;
 }
 /* ---------- automatic WhatsApp through WokieTokie: the values each approved template needs ---------- */
@@ -929,7 +930,7 @@ function apiKind(it) { return it.type === 'trip' ? (it.trip.type === 'Pickup' ? 
 function apiFields(it) {
   if (it.type === 'stay') {
     const g = it.g, a = stayFor(g), h = DB.hotels.find(x => x.name === a.hotel) || {}, d = deskOf('stay');
-    return { one: firstName(g.name), Two: a.hotel, Three: h.address, Four: a.roomNos, Five: dayDate(g.checkIn), Six: dayDate(g.checkOut), Seven: String(partySize(g)), Eight: h.phone, Nine: d.name, Ten: d.phone };
+    return { one: firstName(g.name), Two: a.hotel, Three: h.address, Four: a.roomNos, Five: dayDate(g.checkIn) + (h.checkInTime ? ', ' + fmtTime(h.checkInTime) : ''), Six: dayDate(g.checkOut) + (h.checkOutTime ? ', ' + fmtTime(h.checkOutTime) : ''), Seven: String(partySize(g)), Eight: h.phone, Nine: d.name, Ten: d.phone };
   }
   if (it.type === 'trip') {
     const t = it.trip, f = fleetBy(tripFor(t).vehicleNo) || {}, d = deskOf('transport');
@@ -1112,9 +1113,9 @@ function userForm(u) {
 
 /* ---------- Master data ---------- */
 const MASTER = {
-  hotels: { title: 'Hotels & guest houses', note: 'Used in the Accommodation dropdowns. Room count drives the occupancy check.', get: () => DB.hotels,
-    blank: () => ({ name:'', address:'', contact:'', phone:'', email:'', rooms:'' }),
-    cols: [['name','Name','text',170],['address','Address','text',170],['contact','Contact person','text',130],['phone','Phone','tel',120],['email','Email','email',170],['rooms','Rooms','number',70]],
+  hotels: { title: 'Hotels & guest houses', note: 'Used in the Accommodation dropdowns. Room count drives the occupancy check. Standard check-in and check-out times appear on the guest’s stay confirmation.', get: () => DB.hotels,
+    blank: () => ({ name:'', address:'', contact:'', phone:'', email:'', rooms:'', checkInTime:'', checkOutTime:'' }),
+    cols: [['name','Name','text',170],['address','Address','text',170],['contact','Contact person','text',130],['phone','Phone','tel',120],['email','Email','email',170],['rooms','Rooms','number',70],['checkInTime','Check-in time','time',120],['checkOutTime','Check-out time','time',120]],
     inUse: (r) => Object.values(DB.stay).filter(x => x.hotel === r.name).length },
   vtypes: { title: 'Vehicle types', note: 'Seats decide which type is suggested for each party.', get: () => DB.vehicleTypes,
     blank: () => ({ name:'', seats:'' }), cols: [['name','Type','text',170],['seats','Seats','number',70]],
@@ -1202,12 +1203,12 @@ function tNotify(el) {
       '<div style="padding:10px 0;border-bottom:1px solid var(--line)"><label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="admCopy"' + (DB.notify.adminCopy ? ' checked' : '') + dis() + ' style="width:18px;height:18px;accent-color:var(--maroon)">Email admins a copy of every RSVP</label>' +
       '<label for="adm" class="sm" style="display:block;margin-top:8px">Admin and other recipients (comma-separated emails)</label><input type="text" id="adm" value="' + esc(DB.notify.adminEmails || '') + '"' + dis() + ' style="margin-top:6px"></div>' +
       Object.keys(TEAMS).map(k => '<div class="todo"><div><b>' + TEAMS[k] + '</b><div class="sm">Alerted when a guest note is routed to them · ' + esc(teamEmails(k)) + '</div></div><span class="tag ok">Auto</span></div>').join('') + (can('master') ? '<button type="button" class="sbtn" style="margin-top:10px" data-jump="master" data-sub="teams">Edit team contacts</button>' : '') + '</section>' +
-    waPanel() + '</div>' + wkPanel() +
+    waPanel() + '</div>' + reportPanel() + wkPanel() +
     '<section class="card panel" style="margin-bottom:18px" aria-labelledby="n-e"><h3 id="n-e">Guest confirmation email (sample)</h3>' + mailPreview(g) + '</section>' +
     '<section class="card panel" aria-labelledby="n-l"><h3 id="n-l">Recent notifications</h3>' +
       (DB.log.length ? '<div class="tablebox"><table><thead><tr><th>Time</th><th>Channel</th><th>To</th><th>What</th><th>Result</th></tr></thead><tbody>' + DB.log.map(l => '<tr><td class="sm">' + esc(l.at) + '</td><td>' + esc(l.channel) + '</td><td class="sm">' + esc(l.to) + '</td><td>' + esc(l.what) + '</td><td>' + (/^Sent/.test(l.result) ? '<span class="tag ok">Sent</span>' : '<span class="tag warn">' + esc(l.result) + '</span>') + '</td></tr>').join('') + '</tbody></table></div>'
         : '<p class="empty">No notifications yet.</p>') + '</section>';
-  bindWa(el); bindWk(el);
+  bindWa(el); bindWk(el); bindReport(el);
   const saveN = () => save('saveNotify', [{ adminEmails: $('#adm').value, adminCopy: $('#admCopy').checked }], v => { DB.notify = v; });
   const adm = $('#adm'); if (adm) adm.addEventListener('change', saveN);
   const ac = $('#admCopy'); if (ac) ac.addEventListener('change', saveN);
@@ -1319,6 +1320,33 @@ function bindWk(el) {
     WK_ROWS.forEach(r => v[r[0]] = $('#wk_' + r[0]).value.trim());
     b.disabled = true;
     save('saveWokie', [v], w => { DB.wk = w; rerender(); }).then(() => { b.disabled = false; });
+  });
+}
+
+/* ---------- Management report ---------- */
+function reportPanel() {
+  const r = DB.report; if (!r) return '';
+  const admin = ME.role === 'Admin' && canEdit(), d = admin ? '' : ' disabled';
+  const hrs = Array.from({ length: 24 }, (_, h) => '<option value="' + h + '"' + (+r.hour === h ? ' selected' : '') + '>' + ((h % 12) || 12) + ':00 ' + (h < 12 ? 'AM' : 'PM') + '</option>').join('');
+  return '<section class="card panel" style="margin-bottom:18px" aria-labelledby="n-rp"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 id="n-rp" style="margin:0">Management report by email</h3>' + (r.daily ? '<span class="tag ok">Daily</span>' : '<span class="tag m">On request</span>') + '</div>' +
+    '<p class="sm" style="margin:4px 0 12px">A one-page summary for the senior team: RSVPs and guest numbers, arrivals, accommodation by hotel, transport and open requests. The full guest list (with hotel, room number and status) is attached as an Excel (CSV) file.</p>' +
+    '<label for="rpTo">Send the report to (comma-separated emails)</label><input type="text" id="rpTo" value="' + esc(r.emails || '') + '"' + d + ' placeholder="name@company.com, name2@company.com" style="margin-top:6px">' +
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px"><label style="display:flex;gap:8px;align-items:center;font-weight:600;margin:0"><input type="checkbox" id="rpDaily"' + (r.daily ? ' checked' : '') + d + ' style="width:18px;height:18px;accent-color:var(--maroon)">Send automatically every day at</label>' +
+    '<select id="rpHour"' + d + ' aria-label="Time of the daily report" style="width:auto">' + hrs + '</select><span class="sm">(India time)</span></div>' +
+    (admin ? '<div class="actions" style="margin-top:14px;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="rpSave">Save report settings</button><button type="button" class="sbtn" id="rpNow">Send report now</button></div><p class="sm" id="rpOut" role="status" style="margin:8px 0 0"></p>'
+      : '<p class="sm">Only an Admin can change these settings.</p>') + '</section>';
+}
+function bindReport(el) {
+  const b = $('#rpSave', el); if (!b) return;
+  const out = $('#rpOut', el);
+  b.addEventListener('click', () => {
+    b.disabled = true;
+    save('saveReport', [{ emails: $('#rpTo').value, daily: $('#rpDaily').checked, hour: $('#rpHour').value }], v => { DB.report = v; rerender(); }).then(() => { b.disabled = false; });
+  });
+  $('#rpNow', el).addEventListener('click', () => {
+    const n = $('#rpNow'); n.disabled = true; out.textContent = 'Preparing and sending the report…';
+    call('sendReportNow', TOKEN).then(r => { out.textContent = 'Report sent to ' + r.to + ' at ' + r.at + '.'; n.disabled = false; })
+      .catch(e => { out.textContent = e.message; n.disabled = false; });
   });
 }
 /* ---------- boot ---------- */
