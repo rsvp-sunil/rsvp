@@ -1,0 +1,32 @@
+{
+ "name": "Siddharth Reception – VIP Management",
+ "short_name": "VIP Admin",
+ "description": "Organiser app for the Wedding Reception of Siddharth Galla & Hyein Kim",
+ "id": "/admin/",
+ "start_url": "/admin/",
+ "scope": "/admin/",
+ "display": "standalone",
+ "orientation": "any",
+ "background_color": "#f9f6ef",
+ "theme_color": "#7a1315",
+ "icons": [
+  {
+   "src": "/admin/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}

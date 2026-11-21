@@ -9,6 +9,10 @@
 <link rel="preconnect" href="https://script.google.com">
 <link rel="preconnect" href="https://script.googleusercontent.com">
 <meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="/admin/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="VIP Admin">
 <script src="/config.js"></script>
 <script>
 /* talk to the Google Apps Script back end over the web (replaces google.script.run) */
@@ -1388,6 +1392,22 @@ google.script.run.withSuccessHandler(function (c) {
   if (c.wa) HELP_WA = c.wa[0] || '';
   if (typeof renderGuestContacts === 'function' && document.getElementById('contacts')) try { renderGuestContacts(); } catch (e) {}
 }).getPublicConfig();
+</script>
+<script>
+/* installable app: shows an 'Install app' button when the phone offers it */
+(function () {
+  var ev = null, btn = null;
+  function show() {
+    if (btn || !ev) return;
+    btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Install app';
+    btn.setAttribute('style', 'position:fixed;right:16px;bottom:16px;z-index:9999;background:#7a1315;color:#fff;border:0;border-radius:999px;padding:12px 18px;font:600 14px Jost,Arial,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.25)');
+    btn.onclick = function () { ev.prompt(); ev.userChoice.finally(function () { ev = null; btn.remove(); btn = null; }); };
+    document.body.appendChild(btn);
+  }
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); ev = e; show(); });
+  window.addEventListener('appinstalled', function () { if (btn) btn.remove(); });
+  if ('serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('/admin/sw.js', { scope: '/admin/' }).catch(function () {}); });
+})();
 </script>
 </body>
 </html>
